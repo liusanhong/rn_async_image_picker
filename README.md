@@ -1,10 +1,5 @@
 
-# react-native-syan-image-picker
-
-[![npm](https://img.shields.io/npm/v/react-native-syan-image-picker.svg)](https://www.npmjs.com/package/react-native-syan-image-picker)
-[![npm](https://img.shields.io/npm/dm/react-native-syan-image-picker.svg)](https://www.npmjs.com/package/react-native-syan-image-picker)
-[![npm](https://img.shields.io/npm/dt/react-native-syan-image-picker.svg)](https://www.npmjs.com/package/react-native-syan-image-picker)
-[![npm](https://img.shields.io/npm/l/react-native-syan-image-picker.svg)](https://github.com/syanbo/react-native-syan-image-picker/blob/master/LICENSE)
+# rn-syanc-image-picker
 
 ## 功能介绍
 建议优先使用 https://github.com/syanbo/react-native-syan-image-picker
@@ -34,13 +29,13 @@
 ### 安装
 ```
 // Step 1 基于 npm
-npm install react-native-syan-image-picker --save
+npm install rn_async_image_picker --save
 
 // 或是 yarn
-yarn add react-native-syan-image-picker
+yarn add rn_async_image_picker
 
 // Step 2 执行 link
-react-native link react-native-syan-image-picker
+react-native link rn_async_image_picker
 
 ```
 
@@ -51,7 +46,7 @@ react-native link react-native-syan-image-picker
 - TARGETS -> Build Phases -> Copy Bundle Resources
 点击"+"按钮，在弹出的窗口中点击“Add Other”按钮，选择
     ```
-    node_modules/react-native-syan-image-picker/ios/TZImagePickerController/TZImagePickerController.bundle
+    node_modules/rn_async_image_picker/ios/TZImagePickerController/TZImagePickerController.bundle
     ```
 
 ##### 2、添加相册相关权限：
@@ -129,7 +124,7 @@ android {
 ### iOS
 
 1. In XCode, in the project navigator, right click `Libraries` ➜ `Add Files to [your project's name]`
-2. Go to `node_modules` ➜ `react-native-syan-image-picker` and add `RNSyanImagePicker.xcodeproj`
+2. Go to `node_modules` ➜ `rn_async_image_picker` and add `RNSyanImagePicker.xcodeproj`
 3. In XCode, in the project navigator, select your project. Add `libRNSyanImagePicker.a` to your project's `Build Phases` ➜ `Link Binary With Libraries`
 4. Run your project (`Cmd+R`)<
 
@@ -140,12 +135,12 @@ android {
   - Add `new RNSyanImagePickerPackage()` to the list returned by the `getPackages()` method
 2. Append the following lines to `android/settings.gradle`:
   	```gradle
-  	include ':react-native-syan-image-picker'
-  	project(':react-native-syan-image-picker').projectDir = new File(rootProject.projectDir, 	'../node_modules/react-native-syan-image-picker/android')
+  	include ':rn_async_image_picker'
+  	project(':rn_async_image_picker').projectDir = new File(rootProject.projectDir, 	'../node_modules/rn_async_image_picker/android')
   	```
 3. Insert the following lines inside the dependencies block in `android/app/build.gradle`:
   	```gradle
-      compile project(':react-native-syan-image-picker')
+      compile project(':rn_async_image_picker')
   	```
 
 ## 运行示例
@@ -198,7 +193,7 @@ base64        | string | 图片的 base64 编码，如果 `enableBase64` 设置 
 回调形式需调用 `showImagePicker` 方法：
 
 ```javascript
-import SyanImagePicker from 'react-native-syan-image-picker';
+import SyanImagePicker from 'rn_async_image_picker';
 
 SyanImagePicker.showImagePicker(options, (err, selectedPhotos) => {
   if (err) {
@@ -213,7 +208,7 @@ SyanImagePicker.showImagePicker(options, (err, selectedPhotos) => {
 非回调形式则使用 `asyncShowImagePicker` 方法：
 
 ```javascript
-import SyanImagePicker from 'react-native-syan-image-picker';
+import SyanImagePicker from 'rn_async_image_picker';
 
 // promise-then
 SYImagePicker.asyncShowImagePicker(options)
@@ -260,19 +255,6 @@ STImagePicke.removeAllPhoto()
 ```javascript
 SYImagePicker.deleteCache();
 ```
-
-## 帮助
-加入 React-Native QQ群 397885169
-## 非常感谢
-
-[LuckSiege](https://github.com/LuckSiege/PictureSelector)
-
-[banchichen](https://github.com/banchichen/TZImagePickerController)
-
-[ljunb](https://github.com/ljunb)
-
-## 捐赠
-随时欢迎！！☕️☕️☕️✨✨
 
 
 
