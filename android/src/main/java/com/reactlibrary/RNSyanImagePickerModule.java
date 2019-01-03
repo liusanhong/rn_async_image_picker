@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.Base64;
+import android.util.Log;
 
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.BaseActivityEventListener;
@@ -26,6 +27,10 @@ import com.luck.picture.lib.entity.LocalMedia;
 import com.luck.picture.lib.tools.PictureFileUtils;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -241,8 +246,11 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
                             }
                         } else {
                             // 压缩过，取 media.getCompressPath();
+                            compressProcess(media.getCompressPath(),media);
+                            options.inJustDecodeBounds = true;
                             BitmapFactory.decodeFile(media.getCompressPath(), options);
-                            aImage.putDouble("width", options.outWidth);
+                            int outWidth = options.outWidth;
+                            aImage.putDouble("width", outWidth);
                             aImage.putDouble("height", options.outHeight);
                             aImage.putString("type", "image");
                             aImage.putString("uri", "file://" + media.getCompressPath());
@@ -274,6 +282,70 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
             }
         }
     };
+
+    private void compressProcess(String srcPath,LocalMedia media){
+        if(isNeedCompress(media.getCompressPath())){
+            Bitmap bitmap = compressBySizeOfFile(media.getCompressPath(),1080,1920);
+            saveBitmap(media.getCompressPath(),bitmap);
+        }
+    }
+
+    /**
+     * 将宽度大于1080的图片进行压缩
+     * @param srcPath
+     * @return
+     */
+    private boolean isNeedCompress(String srcPath){
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        Bitmap bitmap = BitmapFactory.decodeFile(srcPath, opts);// 此时返回bm为空
+        // 得到图片的宽度、高度；
+        int imgWidth = opts.outWidth;
+        if(imgWidth <= 1080){
+            return false;
+        }
+        return true;
+    }
+
+    private  Bitmap compressBySizeOfFile(String srcPath,int targetWidth, int targetHeight) {
+
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        Bitmap bitmap = BitmapFactory.decodeFile(srcPath, opts);// 此时返回bm为空
+        // 得到图片的宽度、高度；
+        int imgWidth = opts.outWidth;
+        int imgHeight = opts.outHeight;
+
+        // 分别计算图片宽度、高度与目标宽度、高度的比例；取大于该比例的最小整数；
+        int widthRatio = (int) Math.ceil(imgWidth / (float) targetWidth);
+//        int heightRatio = (int) Math.ceil(imgHeight / (float) targetHeight);
+        if (widthRatio > 1) {
+            opts.inSampleSize = widthRatio;
+        }
+        opts.inJustDecodeBounds = false;
+        bitmap = BitmapFactory.decodeFile(srcPath, opts);
+        return bitmap;// 压缩好比例大小后再进行质量压缩
+    }
+
+    /**
+     * 保存方法
+     */
+    public void saveBitmap(String path,Bitmap bitmap) {
+        File f = new File(path);
+        if (f.exists()) {
+            f.delete();
+        }
+        try {
+            FileOutputStream out = new FileOutputStream(f);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+            out.flush();
+            out.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * 获取图片base64编码字符串
