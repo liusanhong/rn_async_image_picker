@@ -2,11 +2,18 @@
 package com.reactlibrary;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.MediaMetadataRetriever;
+import android.media.ThumbnailUtils;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
+import android.webkit.MimeTypeMap;
 
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.BaseActivityEventListener;
@@ -32,7 +39,9 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.List;
+import java.util.UUID;
 
 public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
 
@@ -47,6 +56,9 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
     private Promise mPickerPromise; // 保存Promise
 
     private ReadableMap cameraOptions; // 保存图片选择/相机选项
+
+    private  final String SD_PATH = "/sdcard/ym/pic/";
+    private  final String IN_PATH = "/ym/pic/";
 
     public RNSyanImagePickerModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -80,6 +92,14 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
         this.cameraOptions = options;
         this.mPickerPromise = null;
         this.mPickerCallback = callback;
+        this.openCamera();
+    }
+
+    @ReactMethod
+    public void asyncOpenCamera(ReadableMap options, Promise promise) {
+        this.cameraOptions = options;
+        this.mPickerPromise = null;
+        this.mPickerPromise = promise;
         this.openCamera();
     }
 
@@ -129,6 +149,7 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
         boolean showCropFrame = this.cameraOptions.getBoolean("showCropFrame");
         boolean showCropGrid = this.cameraOptions.getBoolean("showCropGrid");
         int quality = this.cameraOptions.getInt("quality");
+        int openGalleryType = this.cameraOptions.getInt("openGalleryType");
 
         int modeValue;
         if (imageCount == 1) {
@@ -138,7 +159,7 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
         }
         Activity currentActivity = getCurrentActivity();
         PictureSelector.create(currentActivity)
-                .openGallery(PictureMimeType.ofImage())//全部.PictureMimeType.ofAll()、图片.ofImage()、视频.ofVideo()、音频.ofAudio()
+                .openGallery(openGalleryType)//全部.PictureMimeType.ofAll() 0、图片.ofImage() 1、视频.ofVideo() 2、音频.ofAudio() 3
                 .maxSelectNum(imageCount)// 最大图片选择数量 int
                 .minSelectNum(0)// 最小选择数量 int
                 .imageSpanCount(4)// 每行显示个数 int
@@ -185,10 +206,11 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
         boolean showCropFrame = this.cameraOptions.getBoolean("showCropFrame");
         boolean showCropGrid = this.cameraOptions.getBoolean("showCropGrid");
         int quality = this.cameraOptions.getInt("quality");
-
+        int openGalleryType = this.cameraOptions.getInt("openGalleryType");
+        Log.d("liujieopenGalleryType:",openGalleryType+"");
         Activity currentActivity = getCurrentActivity();
         PictureSelector.create(currentActivity)
-                .openCamera(PictureMimeType.ofImage())
+                .openCamera(openGalleryType)
                 .imageFormat(PictureMimeType.PNG)// 拍照保存图片格式后缀,默认jpeg
                 .enableCrop(isCrop)// 是否裁剪 true or false
                 .compress(true)// 是否压缩 true or false
@@ -200,12 +222,16 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
                 .showCropFrame(showCropFrame)// 是否显示裁剪矩形边框 圆形裁剪时建议设为false   true or false
                 .showCropGrid(showCropGrid)// 是否显示裁剪矩形网格 圆形裁剪时建议设为false    true or false
                 .openClickSound(false)// 是否开启点击声音 true or false
+                .videoQuality(1)// 视频录制质量 0 or 1 int
+                .videoMaxSecond(15)// 显示多少秒以内的视频or音频也可适用 int
+                .videoMinSecond(10)// 显示多少秒以内的视频or音频也可适用 int
+                .recordVideoSecond(60)//视频秒数录制 默认60s int
                 .cropCompressQuality(quality)// 裁剪压缩质量 默认90 int
                 .minimumCompressSize(100)// 小于100kb的图片不压缩
                 .synOrAsy(true)//同步true或异步false 压缩 默认同步
                 .rotateEnabled(true) // 裁剪是否可旋转图片 true or false
                 .scaleEnabled(true)// 裁剪是否可放大缩小图片 true or false
-                .forResult(PictureConfig.CHOOSE_REQUEST);//结果回调onActivityResult code
+                .forResult(PictureConfig.REQUEST_CAMERA);//结果回调onActivityResult code
     }
 
     private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
@@ -221,67 +247,182 @@ public class RNSyanImagePickerModule extends ReactContextBaseJavaModule {
 
                     WritableArray imageList = new WritableNativeArray();
                     boolean enableBase64 = cameraOptions.getBoolean("enableBase64");
-
                     for (LocalMedia media : tmpSelectList) {
-                        WritableMap aImage = new WritableNativeMap();
-
-                        BitmapFactory.Options options = new BitmapFactory.Options();
-
-                        options.inJustDecodeBounds = true;
-                        if (!media.isCompressed()) {
-                            BitmapFactory.decodeFile(media.getPath(), options);
-                            aImage.putDouble("width", options.outWidth);
-                            aImage.putDouble("height", options.outHeight);
-                            aImage.putString("type", "image");
-                            aImage.putString("uri", "file://" + media.getPath());
-
-                            //decode to bitmap
-                            Bitmap bitmap = BitmapFactory.decodeFile(media.getPath());
-                            aImage.putInt("size", bitmap.getByteCount());
-
-                            //base64 encode
-                            if (enableBase64) {
-                                String encodeString = getBase64EncodeString(bitmap);
-                                aImage.putString("base64", encodeString);
-                            }
-                        } else {
-                            // 压缩过，取 media.getCompressPath();
-                            compressProcess(media.getCompressPath(),media);
-                            options.inJustDecodeBounds = true;
-                            BitmapFactory.decodeFile(media.getCompressPath(), options);
-                            int outWidth = options.outWidth;
-                            aImage.putDouble("width", outWidth);
-                            aImage.putDouble("height", options.outHeight);
-                            aImage.putString("type", "image");
-                            aImage.putString("uri", "file://" + media.getCompressPath());
-
-                            //decode to bitmap
-                            Bitmap bitmap = BitmapFactory.decodeFile(media.getCompressPath());
-                            aImage.putInt("size", bitmap.getByteCount());
-
-                            //base64 encode
-                            if (enableBase64) {
-                                String encodeString = getBase64EncodeString(bitmap);
-                                aImage.putString("base64", encodeString);
-                            }
+                        Log.d("liujie:",media.getPath());
+                        String fileExtension = MimeTypeMap.getFileExtensionFromUrl(media.getPath());
+                        String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(fileExtension);
+                        if(mimeType.contains("video")){
+                            WritableMap aVideo = processVideo(media);
+                            imageList.pushMap(aVideo);
+                        }else if(mimeType.contains("image")){
+                            WritableMap aImage = processImage(media,enableBase64);
+                            imageList.pushMap(aImage);
                         }
-
-                        if (media.isCut()) {
-                            aImage.putString("original_uri", "file://" + media.getCutPath());
-                        } else {
-                            aImage.putString("original_uri", "file://" + media.getPath());
-                        }
-
-                        imageList.pushMap(aImage);
                     }
                     if (tmpSelectList.isEmpty()) {
                         invokeError();
                     } else {
                         invokeSuccessWithResult(imageList);
                     }
+                    break;
+                case PictureConfig.REQUEST_CAMERA:
+                    onGetVideoResult(data);
+                    break;
             }
         }
     };
+
+    private void onGetVideoResult(Intent data) {
+        List<LocalMedia> mVideoSelectList = PictureSelector.obtainMultipleResult(data);
+        boolean isRecordSelectedV = cameraOptions.getBoolean("isRecordSelected");
+        if (!mVideoSelectList.isEmpty() && isRecordSelectedV) {
+            selectList = mVideoSelectList;
+        }
+        WritableArray videoList = new WritableNativeArray();
+        for (LocalMedia media : mVideoSelectList) {
+            if (TextUtils.isEmpty(media.getPath())){
+                continue;
+            }
+            WritableMap avideo = processVideo(media);
+            videoList.pushMap(avideo);
+        }
+
+        if (mVideoSelectList.isEmpty()) {
+            invokeError();
+        } else {
+            invokeSuccessWithResult(videoList);
+        }
+    }
+
+    private WritableMap processVideo(LocalMedia media){
+        WritableMap aVideo = new WritableNativeMap();
+        Bitmap bitmap = ThumbnailUtils.createVideoThumbnail(media.getPath(), MediaStore.Video.Thumbnails.MINI_KIND);
+        if(bitmap != null){
+            Log.d("liujie:1:",saveBitmapToLoacal(getCurrentActivity(),bitmap));
+        }
+        String thumbnail = saveBitmapToLoacal(getCurrentActivity(),bitmap);
+        aVideo.putString("type", "video");
+        aVideo.putString("size", new File(media.getPath()).length() + "");
+        aVideo.putString("duration", media.getDuration() + "");
+        aVideo.putString("thumbnail", "file://" + thumbnail);
+        aVideo.putString("uri", "file://" + media.getPath());
+        return aVideo;
+    }
+
+    private WritableMap processImage(LocalMedia media,boolean enableBase64){
+        WritableMap aImage = new WritableNativeMap();
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        if (!media.isCompressed()) {
+            BitmapFactory.decodeFile(media.getPath(), options);
+            aImage.putDouble("width", options.outWidth);
+            aImage.putDouble("height", options.outHeight);
+            aImage.putString("type", "image");
+            aImage.putString("uri", "file://" + media.getPath());
+
+            //decode to bitmap
+            Bitmap bitmap = BitmapFactory.decodeFile(media.getPath());
+            aImage.putInt("size", bitmap.getByteCount());
+
+            //base64 encode
+            if (enableBase64) {
+                String encodeString = getBase64EncodeString(bitmap);
+                aImage.putString("base64", encodeString);
+            }
+        } else {
+            // 压缩过，取 media.getCompressPath();
+            compressProcess(media.getCompressPath(),media);
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(media.getCompressPath(), options);
+            int outWidth = options.outWidth;
+            aImage.putDouble("width", outWidth);
+            aImage.putDouble("height", options.outHeight);
+            aImage.putString("type", "image");
+            aImage.putString("uri", "file://" + media.getCompressPath());
+
+            //decode to bitmap
+            Bitmap bitmap = BitmapFactory.decodeFile(media.getCompressPath());
+            aImage.putInt("size", bitmap.getByteCount());
+
+            //base64 encode
+            if (enableBase64) {
+                String encodeString = getBase64EncodeString(bitmap);
+                aImage.putString("base64", encodeString);
+            }
+        }
+
+        if (media.isCut()) {
+            aImage.putString("original_uri", "file://" + media.getCutPath());
+        } else {
+            aImage.putString("original_uri", "file://" + media.getPath());
+        }
+        return aImage;
+    }
+
+    private  Bitmap getVideoThumbnail(String filePath) {
+        Bitmap bitmap = null;
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        Bitmap bitmap1 = ThumbnailUtils.createVideoThumbnail(filePath, MediaStore.Video.Thumbnails.MINI_KIND);
+        try {
+            if (filePath.startsWith("http://")
+                    || filePath.startsWith("https://")
+                    || filePath.startsWith("widevine://")) {
+                retriever.setDataSource(filePath, new Hashtable<String, String >());
+            } else {
+                retriever.setDataSource(filePath);
+            }
+            bitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC); //retriever.getFrameAtTime(-1);
+        } catch (IllegalArgumentException ex) {
+            // Assume this is a corrupt video file
+            ex.printStackTrace();
+        } catch (RuntimeException ex) {
+            // Assume this is a corrupt video file.
+            ex.printStackTrace();
+        } finally {
+            try {
+                retriever.release();
+            } catch (RuntimeException ex) {
+                // Ignore failures while cleaning up.
+                ex.printStackTrace();
+            }
+        }
+
+        return bitmap;
+    }
+
+    private  String saveBitmapToLoacal(Context context, Bitmap mBitmap) {
+        String savePath;
+        File filePic;
+        if (Environment.getExternalStorageState().equals(
+                Environment.MEDIA_MOUNTED)) {
+            savePath = SD_PATH;
+        } else {
+            savePath = context.getApplicationContext().getFilesDir()
+                    .getAbsolutePath()
+                    + IN_PATH;
+        }
+        try {
+            filePic = new File(savePath + generateFileName() + ".jpg");
+            if (!filePic.exists()) {
+                filePic.getParentFile().mkdirs();
+                filePic.createNewFile();
+            }
+            FileOutputStream fos = new FileOutputStream(filePic);
+            mBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+            fos.flush();
+            fos.close();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return null;
+        }
+
+        return filePic.getAbsolutePath();
+    }
+
+    private String generateFileName() {
+        return UUID.randomUUID().toString();
+    }
 
     private void compressProcess(String srcPath,LocalMedia media){
         if(isNeedCompress(media.getCompressPath())){
