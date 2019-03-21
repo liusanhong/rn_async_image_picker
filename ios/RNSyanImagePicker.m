@@ -1,10 +1,13 @@
 
 #import "RNSyanImagePicker.h"
 #import "TZImagePickerController.h"
+#import <AVFoundation/AVFoundation.h>
 #import "TZImageManager.h"
 #import "NSDictionary+SYSafeConvert.h"
+#import <MobileCoreServices/MobileCoreServices.h>
 #import <AssetsLibrary/AssetsLibrary.h>
 #import <React/RCTUtils.h>
+
 
 @interface RNSyanImagePicker ()
 
@@ -26,6 +29,8 @@
  保存选中的图片数组
  */
 @property (nonatomic, strong) NSMutableArray *selectedAssets;
+
+
 @end
 
 @implementation RNSyanImagePicker
@@ -45,8 +50,8 @@
 RCT_EXPORT_MODULE()
 
 RCT_EXPORT_METHOD(showImagePicker:(NSDictionary *)options
-                         callback:(RCTResponseSenderBlock)callback) {
-	self.cameraOptions = options;
+                  callback:(RCTResponseSenderBlock)callback) {
+    self.cameraOptions = options;
     self.callback = callback;
     self.resolveBlock = nil;
     self.rejectBlock = nil;
@@ -57,11 +62,23 @@ RCT_REMAP_METHOD(asyncShowImagePicker,
                  options:(NSDictionary *)options
                  resolver:(RCTPromiseResolveBlock)resolve
                  rejecter:(RCTPromiseRejectBlock)reject) {
-	self.cameraOptions = options;
+    self.cameraOptions = options;
     self.resolveBlock = resolve;
     self.rejectBlock = reject;
     self.callback = nil;
     [self openImagePicker];
+}
+
+RCT_REMAP_METHOD(asyncOpenCamera,
+                 options:(NSDictionary *)options
+                 resolve:(RCTPromiseResolveBlock)resolve
+                 rejecte:(RCTPromiseRejectBlock)reject) {
+    self.cameraOptions = options;
+    self.resolveBlock = resolve;
+    self.rejectBlock = reject;
+    self.callback = nil;
+    [self openVideoPicker];
+//    [self openImagePicker];
 }
 
 RCT_EXPORT_METHOD(openCamera:(NSDictionary *)options callback:(RCTResponseSenderBlock)callback) {
@@ -89,6 +106,31 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
     }
 }
 
+
+- (void)openVideoPicker
+{
+    [[self topViewController] presentViewController:self.imagePicker animated:YES completion:nil];
+}
+
+- (UIImagePickerController *)imagePicker
+{
+    if (_imagePickerVc == nil) {
+        _imagePickerVc = [[UIImagePickerController alloc] init];
+        _imagePickerVc.delegate = self;
+        _imagePickerVc.sourceType = UIImagePickerControllerSourceTypeCamera;    //设置来源为摄像头
+        _imagePickerVc.cameraDevice = UIImagePickerControllerCameraDeviceRear; //设置使用的摄像头为：后置摄像头
+        
+        _imagePickerVc.mediaTypes = @[(NSString *)kUTTypeMovie];
+        
+        //        _imagePicker.mediaTypes = @[(NSString *)kUTTypeVideo];    //设置为视频模式-<span style="color: rgb(51, 51, 51); font-family: Georgia, 'Times New Roman', Times, sans-serif; font-size: 14px; line-height: 25px;">注意媒体类型定义在MobileCoreServices.framework中</span>
+        _imagePickerVc.videoQuality = UIImagePickerControllerQualityTypeIFrame1280x720;   //设置视频质量
+        _imagePickerVc.cameraCaptureMode = UIImagePickerControllerCameraCaptureModeVideo;  //设置摄像头模式为录制视频
+        
+    }
+    return _imagePickerVc;
+}
+
+
 - (void)openImagePicker {
     // 照片最大可选张数
     NSInteger imageCount = [self.cameraOptions sy_integerForKey:@"imageCount"];
@@ -104,26 +146,28 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
     NSInteger CropH      = [self.cameraOptions sy_integerForKey:@"CropH"];
     NSInteger circleCropRadius = [self.cameraOptions sy_integerForKey:@"circleCropRadius"];
     NSInteger   quality  = [self.cameraOptions sy_integerForKey:@"quality"];
-
+    NSInteger   openGalleryType  = [self.cameraOptions sy_integerForKey:@"openGalleryType"];
+    
     TZImagePickerController *imagePickerVc = [[TZImagePickerController alloc] initWithMaxImagesCount:imageCount delegate:nil];
-
+    
     imagePickerVc.maxImagesCount = imageCount;
     imagePickerVc.allowPickingGif = isGif; // 允许GIF
     imagePickerVc.allowTakePicture = isCamera; // 允许用户在内部拍照
-    imagePickerVc.allowPickingVideo = NO; // 不允许视频
+    imagePickerVc.allowPickingVideo = YES; // 允许视频
     imagePickerVc.allowPickingOriginalPhoto = allowPickingOriginalPhoto; // 允许原图
     imagePickerVc.sortAscendingByModificationDate = sortAscendingByModificationDate;
     imagePickerVc.alwaysEnableDoneBtn = YES;
     imagePickerVc.allowCrop = isCrop;   // 裁剪
-
+     imagePickerVc.openGalleryType = openGalleryType;   // 是否为视频
+    
     if (isRecordSelected) {
         imagePickerVc.selectedAssets = self.selectedAssets; // 当前已选中的图片
     }
-
+    
     if (imageCount == 1) {
         // 单选模式
         imagePickerVc.showSelectBtn = NO;
-
+        
         if(isCrop){
             if(showCropCircle) {
                 imagePickerVc.needCircleCrop = showCropCircle; //圆形裁剪
@@ -135,13 +179,19 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
             }
         }
     }
-
+    
     __block TZImagePickerController *weakPicker = imagePickerVc;
+     //图片选择后的回调
     [imagePickerVc setDidFinishPickingPhotosWithInfosHandle:^(NSArray<UIImage *> *photos,NSArray *assets,BOOL isSelectOriginalPhoto,NSArray<NSDictionary *> *infos) {
         if (isRecordSelected) {
             self.selectedAssets = [NSMutableArray arrayWithArray:assets];
         }
         NSMutableArray *selectedPhotos = [NSMutableArray array];
+        
+        NSData *data = [NSJSONSerialization dataWithJSONObject:selectedPhotos options:kNilOptions error:nil];
+        NSLog(@"selectedPhotos::::%@", [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]);
+//        NSLog(@"selectedPhotos::::%@",st2);
+        
         [weakPicker showProgressHUD];
         if (imageCount == 1 && isCrop) {
             [selectedPhotos addObject:[self handleImageData:photos[0] quality:quality]];
@@ -153,13 +203,49 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
         [self invokeSuccessWithResult:selectedPhotos];
         [weakPicker hideProgressHUD];
     }];
-
+    
+    //视频选择后的回调
+    [imagePickerVc setDidFinishPickingVideoHandle:^(UIImage *coverImage,PHAsset *asset){
+        NSLog(@"selectedPhotos:::video:::,%f,%ld",coverImage.size.width,(long)asset.mediaType);
+//        NSMutableArray *selectedPhotos = [NSMutableArray array];
+//         [selectedPhotos addObject:[self handleImageData:asset quality:quality]];
+        
+        if (asset.mediaType == PHAssetMediaTypeVideo) {
+                     PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
+                      options.version = PHImageRequestOptionsVersionCurrent;
+                     options.deliveryMode = PHVideoRequestOptionsDeliveryModeAutomatic;
+                     
+                     PHImageManager *manager = [PHImageManager defaultManager];
+                        [manager requestAVAssetForVideo:asset options:options resultHandler:^(AVAsset * _Nullable asset, AVAudioMix * _Nullable audioMix, NSDictionary * _Nullable info) {
+                             AVURLAsset *urlAsset = (AVURLAsset *)asset;
+                             
+                            NSURL *url = urlAsset.URL;
+//                           NSData *data = [NSData dataWithContentsOfURL:url];
+//                   NSLog(@"%@",data);
+                              NSString *urlPath = [url path];
+                    NSLog(@"视频保存后的回调urlPath:::%@", urlPath);
+                    NSMutableArray *selectedVideo = [NSMutableArray array];
+                    NSMutableDictionary *video = [NSMutableDictionary dictionary];
+                    
+                    UIImage *firtImage = [self thumbnailImageForVideo:url atTime:0];
+                    //拿到视频第一针，并将相关数据放到video
+                    video =[self handleImageData:firtImage];
+                    video[@"type"] = @"video";
+                    video[@"uri"] = [@"file://" stringByAppendingString:urlPath];
+                    [selectedVideo addObject:video];
+                    self.resolveBlock(selectedVideo);
+                             
+                        }];
+                 }
+        
+    }];
+    
     __block TZImagePickerController *weakPickerVc = imagePickerVc;
     [imagePickerVc setImagePickerControllerDidCancelHandle:^{
         [self invokeError];
         [weakPickerVc hideProgressHUD];
     }];
-
+    
     [[self topViewController] presentViewController:imagePickerVc animated:YES completion:nil];
 }
 
@@ -206,7 +292,7 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
     if ([UIImagePickerController isSourceTypeAvailable: UIImagePickerControllerSourceTypeCamera]) {
         self.imagePickerVc.sourceType = sourceType;
         [[self topViewController] presentViewController:self.imagePickerVc animated:YES completion:nil];
-    } else {
+    }else {
         NSLog(@"模拟器中无法打开照相机,请在真机中使用");
     }
 }
@@ -214,13 +300,14 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
 - (void)imagePickerController:(UIImagePickerController*)picker didFinishPickingMediaWithInfo:(NSDictionary *)info {
     [picker dismissViewControllerAnimated:YES completion:^{
         NSString *type = [info objectForKey:UIImagePickerControllerMediaType];
+        NSLog(@"type urlPath:::%@",type);
         if ([type isEqualToString:@"public.image"]) {
-
+            NSLog(@"public.image urlPath:::");
             TZImagePickerController *tzImagePickerVc = [[TZImagePickerController alloc] initWithMaxImagesCount:1 delegate:nil];
             tzImagePickerVc.sortAscendingByModificationDate = NO;
             [tzImagePickerVc showProgressHUD];
             UIImage *image = [info objectForKey:UIImagePickerControllerOriginalImage];
-
+            
             // save photo and get asset / 保存图片，获取到asset
             [[TZImageManager manager] savePhotoWithImage:image location:NULL completion:^(PHAsset *asset, NSError *error){
                 if (error) {
@@ -230,7 +317,7 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
                     [[TZImageManager manager] getCameraRollAlbum:NO allowPickingImage:YES needFetchAssets:YES completion:^(TZAlbumModel *model) {
                         [[TZImageManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES completion:^(NSArray<TZAssetModel *> *models) {
                             [tzImagePickerVc hideProgressHUD];
-
+                            
                             TZAssetModel *assetModel = [models firstObject];
                             BOOL isCrop          = [self.cameraOptions sy_boolForKey:@"isCrop"];
                             BOOL showCropCircle  = [self.cameraOptions sy_boolForKey:@"showCropCircle"];
@@ -238,7 +325,7 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
                             NSInteger CropH      = [self.cameraOptions sy_integerForKey:@"CropH"];
                             NSInteger circleCropRadius = [self.cameraOptions sy_integerForKey:@"circleCropRadius"];
                             NSInteger   quality = [self.cameraOptions sy_integerForKey:@"quality"];
-
+                            
                             if (isCrop) {
                                 TZImagePickerController *imagePicker = [[TZImagePickerController alloc] initCropTypeWithAsset:assetModel.asset photo:image completion:^(UIImage *cropImage, id asset) {
                                     [self invokeSuccessWithResult:@[[self handleImageData:cropImage quality:quality]]];
@@ -260,9 +347,66 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
                     }];
                 }
             }];
+        }else if([type isEqualToString:(NSString *)kUTTypeMovie]){
+            //视频保存后 播放视频
+            NSURL *url = [info objectForKey:UIImagePickerControllerMediaURL];
+            NSString *urlPath = [url path];
+            //urlPath:::/private/var/mobile/Containers/Data/Application/E689D40D-6FF0-4050-9A5B-F64E6CB00F3C/tmp/57476060886__4316FAC0-4F6B-4706-84F1-B7F9B9000AA0.MOV
+          
+            if (UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(urlPath)) {
+                UISaveVideoAtPathToSavedPhotosAlbum(urlPath, self, @selector(video:didFinishSavingWithError:contextInfo:), nil);
+            }
         }
     }];
 }
+
+
+//视频保存后的回调 返回给js端
+- (void)video:(NSString *)videoPath didFinishSavingWithError:(NSError *)error contextInfo:(void *)contextInfo{
+    if (error) {
+        NSLog(@"保存视频过程中发生错误，错误信息:%@",error.localizedDescription);
+    }else{
+        NSLog(@"视频保存成功.");
+        //录制完之后自动发送到js端
+        NSURL *url=[NSURL fileURLWithPath:videoPath];
+        NSString *urlPath = [url path];
+        NSLog(@"视频保存后的回调urlPath:::%@", urlPath);
+        NSMutableArray *selectedVideo = [NSMutableArray array];
+        NSMutableDictionary *video = [NSMutableDictionary dictionary];
+     
+        UIImage *firtImage = [self thumbnailImageForVideo:url atTime:0];
+        //拿到视频第一针，并将相关数据放到video
+        video =[self handleImageData:firtImage];
+        video[@"type"] = @"video";
+        video[@"uri"] = [@"file://" stringByAppendingString:urlPath];
+        [selectedVideo addObject:video];
+       self.resolveBlock(selectedVideo);
+    }
+}
+
+//拿到视频的第一针图片
+- (UIImage*) thumbnailImageForVideo:(NSURL *)videoURL atTime:(NSTimeInterval)time {
+    
+    AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:videoURL options:nil];
+    NSParameterAssert(asset);
+    AVAssetImageGenerator *assetImageGenerator =[[AVAssetImageGenerator alloc] initWithAsset:asset];
+    assetImageGenerator.appliesPreferredTrackTransform = YES;
+    assetImageGenerator.apertureMode = AVAssetImageGeneratorApertureModeEncodedPixels;
+    
+    CGImageRef thumbnailImageRef = NULL;
+    CFTimeInterval thumbnailImageTime = time;
+    NSError *thumbnailImageGenerationError = nil;
+    thumbnailImageRef = [assetImageGenerator copyCGImageAtTime:CMTimeMake(thumbnailImageTime, 60)actualTime:NULL error:&thumbnailImageGenerationError];
+    
+    if(!thumbnailImageRef)
+        NSLog(@"thumbnailImageGenerationError %@",thumbnailImageGenerationError);
+    
+    UIImage*thumbnailImage = thumbnailImageRef ? [[UIImage alloc]initWithCGImage: thumbnailImageRef] : nil;
+    
+    return thumbnailImage;
+}
+
+
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
     [self invokeError];
@@ -280,13 +424,13 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
 
 - (NSDictionary *)handleImageData:(UIImage *) image quality:(NSInteger)quality {
     NSMutableDictionary *photo = [NSMutableDictionary dictionary];
-	NSData *imageData = UIImageJPEGRepresentation(image, quality * 1.0 / 100);
-
+    NSData *imageData = UIImageJPEGRepresentation(image, quality * 1.0 / 100);
+    
     // 剪切图片并放在tmp中
     photo[@"width"] = @(image.size.width);
     photo[@"height"] = @(image.size.height);
-	photo[@"size"] = @(imageData.length);
-
+    photo[@"size"] = @(imageData.length);
+    
     NSString *fileName = [NSString stringWithFormat:@"%@.jpg", [[NSUUID UUID] UUIDString]];
     [self createDir];
     NSString *filePath = [NSString stringWithFormat:@"%@ImageCaches/%@", NSTemporaryDirectory(), fileName];
@@ -295,7 +439,32 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
     } else {
         NSLog(@"保存压缩图片失败%@", filePath);
     }
+    
+    if ([self.cameraOptions sy_boolForKey:@"enableBase64"]) {
+        photo[@"base64"] = [NSString stringWithFormat:@"data:image/jpeg;base64,%@", [imageData base64EncodedStringWithOptions:0]];
+    }
+    return photo;
+}
 
+// 视频图片的转换，没有质量压缩。不会有base64，uri为：thumbnail
+- (NSDictionary *)handleImageData:(UIImage *) image  {
+    NSMutableDictionary *photo = [NSMutableDictionary dictionary];
+    NSData *imageData = UIImageJPEGRepresentation(image,1.0 / 100);
+    
+    // 剪切图片并放在tmp中
+    photo[@"width"] = @(image.size.width);
+    photo[@"height"] = @(image.size.height);
+    photo[@"size"] = @(imageData.length);
+    
+    NSString *fileName = [NSString stringWithFormat:@"%@.jpg", [[NSUUID UUID] UUIDString]];
+    [self createDir];
+    NSString *filePath = [NSString stringWithFormat:@"%@ImageCaches/%@", NSTemporaryDirectory(), fileName];
+    if ([imageData writeToFile:filePath atomically:YES]) {
+        photo[@"thumbnail"] = filePath;
+    } else {
+        NSLog(@"保存压缩图片失败%@", filePath);
+    }
+    
     if ([self.cameraOptions sy_boolForKey:@"enableBase64"]) {
         photo[@"base64"] = [NSString stringWithFormat:@"data:image/jpeg;base64,%@", [imageData base64EncodedStringWithOptions:0]];
     }
@@ -326,7 +495,7 @@ RCT_EXPORT_METHOD(removeAllPhoto) {
 
 + (BOOL)requiresMainQueueSetup
 {
-   return YES;
+    return YES;
 }
 
 - (BOOL)createDir {
