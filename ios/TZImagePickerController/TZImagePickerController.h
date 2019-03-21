@@ -44,6 +44,10 @@
 /// Default is 9 / 默认最大可选9张图片
 @property (nonatomic, assign) NSInteger maxImagesCount;
 
+
+//openGalleryType  //全部.PictureMimeType.ofAll() 0,图片.ofImage() 1,视频.ofVideo() 2,音频.ofAudio() 3 没用
+@property (nonatomic, assign) NSInteger openGalleryType;
+
 /// The minimum count photos user must pick, Default is 0
 /// 最小照片必选张数,默认是0
 @property (nonatomic, assign) NSInteger minImagesCount;
@@ -79,6 +83,7 @@
 /// Default is NO, if set YES, user can picking gif image.
 /// 默认为NO，如果设置为YES,用户可以选择gif图片
 @property (nonatomic, assign) BOOL allowPickingGif;
+
 
 /// Default is YES, if set NO, user can't picking image.
 /// 默认为YES，如果设置为NO,用户将不能选择发送图片
